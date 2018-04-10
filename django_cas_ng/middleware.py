@@ -9,7 +9,6 @@ from django.http import HttpResponseRedirect
 from django.core.exceptions import PermissionDenied
 from django.conf import settings
 from django.contrib.auth import REDIRECT_FIELD_NAME
-from django.contrib.auth.views import login, logout
 try:
     # Django > 1.10 deprecates django.core.urlresolvers
     from django.urls import reverse
@@ -26,6 +25,7 @@ except ImportError:
 import django
 
 from .views import login as cas_login, logout as cas_logout
+from seahub.auth.views import login, logout
 
 __all__ = ['CASMiddleware']
 

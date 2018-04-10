@@ -1,10 +1,10 @@
 from cas import CASClient
 from django.conf import settings as django_settings
-from django.contrib.auth import REDIRECT_FIELD_NAME, SESSION_KEY, BACKEND_SESSION_KEY, load_backend
 from django.contrib.auth.models import AnonymousUser
 from django.utils.six.moves import urllib_parse
 from django.shortcuts import resolve_url
 
+from seahub.auth import REDIRECT_FIELD_NAME, SESSION_KEY, BACKEND_SESSION_KEY, load_backend
 
 def get_protocol(request):
     """Returns 'http' or 'https' for the request protocol"""
@@ -65,10 +65,12 @@ def get_cas_client(service_url=None, request=None):
         scheme = request.META.get("X-Forwarded-Proto", request.scheme)
         server_url = scheme + "://" + request.META['HTTP_HOST'] + server_url
     # assert server_url.startswith('http'), "settings.CAS_SERVER_URL invalid"
+
     return CASClient(
         service_url=service_url,
         version=django_settings.CAS_VERSION,
         server_url=server_url,
+        verify_server_ca=django_settings.CAS_SERVER_CERT_VERIFY,
         extra_login_params=django_settings.CAS_EXTRA_LOGIN_PARAMS,
         renew=django_settings.CAS_RENEW,
         username_attribute=django_settings.CAS_USERNAME_ATTRIBUTE,

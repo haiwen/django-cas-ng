@@ -2,19 +2,27 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
-from django.contrib.auth import get_user_model
 from django.contrib.auth.backends import ModelBackend
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
-from django_cas_ng.signals import cas_user_authenticated
+from .signals import cas_user_authenticated
 from .utils import get_cas_client
+
+from seahub.base.accounts import User
 
 __all__ = ['CASBackend']
 
 
 class CASBackend(ModelBackend):
     """CAS authentication backend"""
+
+    def get_user(self, username):
+        try:
+            user = User.objects.get(email=username)
+        except User.DoesNotExist:
+            user = None
+        return user
 
     def authenticate(self, request, ticket, service):
         """Verifies CAS ticket and gets or creates User object"""
@@ -40,26 +48,29 @@ class CASBackend(ModelBackend):
                     attributes[req_attr_name] = attributes[cas_attr_name]
                     attributes.pop(cas_attr_name)
 
-        UserModel = get_user_model()
-
         # Note that this could be accomplished in one try-except clause, but
         # instead we use get_or_create when creating unknown users since it has
         # built-in safeguards for multiple threads.
         if settings.CAS_CREATE_USER:
             user_kwargs = {
-                UserModel.USERNAME_FIELD: username
+                username: username
             }
             if settings.CAS_CREATE_USER_WITH_ID:
                 user_kwargs['id'] = self.get_user_id(attributes)
 
-            user, created = UserModel._default_manager.get_or_create(**user_kwargs)
-            if created:
+            try:
+                user = User.objects.get(email=username)
+                created = False
+            except User.DoesNotExist:
+                user = User.objects.create_user(
+                    email=username, is_active=True)
                 user = self.configure_user(user)
+                created = True
         else:
             created = False
             try:
-                user = UserModel._default_manager.get_by_natural_key(username)
-            except UserModel.DoesNotExist:
+                user = User.objects.get(email=username)
+            except User.DoesNotExist:
                 pass
 
         if not self.user_can_authenticate(user):
@@ -68,37 +79,37 @@ class CASBackend(ModelBackend):
         if pgtiou and settings.CAS_PROXY_CALLBACK and request:
             request.session['pgtiou'] = pgtiou
 
-        if settings.CAS_APPLY_ATTRIBUTES_TO_USER and attributes:
-            # If we are receiving None for any values which cannot be NULL
-            # in the User model, set them to an empty string instead.
-            # Possibly it would be desirable to let these throw an error
-            # and push the responsibility to the CAS provider or remove
-            # them from the dictionary entirely instead. Handling these
-            # is a little ambiguous.
-            user_model_fields = UserModel._meta.fields
-            for field in user_model_fields:
-                # Handle null -> '' conversions mentioned above
-                if not field.null:
-                    try:
-                        if attributes[field.name] is None:
-                            attributes[field.name] = ''
-                    except KeyError:
-                        continue
-                # Coerce boolean strings into true booleans
-                if field.get_internal_type() == 'BooleanField':
-                    try:
-                        boolean_value = attributes[field.name] == 'True'
-                        attributes[field.name] = boolean_value
-                    except KeyError:
-                        continue
+        # if settings.CAS_APPLY_ATTRIBUTES_TO_USER and attributes:
+        #     # If we are receiving None for any values which cannot be NULL
+        #     # in the User model, set them to an empty string instead.
+        #     # Possibly it would be desirable to let these throw an error
+        #     # and push the responsibility to the CAS provider or remove
+        #     # them from the dictionary entirely instead. Handling these
+        #     # is a little ambiguous.
+        #     user_model_fields = UserModel._meta.fields
+        #     for field in user_model_fields:
+        #         # Handle null -> '' conversions mentioned above
+        #         if not field.null:
+        #             try:
+        #                 if attributes[field.name] is None:
+        #                     attributes[field.name] = ''
+        #             except KeyError:
+        #                 continue
+        #         # Coerce boolean strings into true booleans
+        #         if field.get_internal_type() == 'BooleanField':
+        #             try:
+        #                 boolean_value = attributes[field.name] == 'True'
+        #                 attributes[field.name] = boolean_value
+        #             except KeyError:
+        #                 continue
 
-            user.__dict__.update(attributes)
+        #     user.__dict__.update(attributes)
 
-            # If we are keeping a local copy of the user model we
-            # should save these attributes which have a corresponding
-            # instance in the DB.
-            if settings.CAS_CREATE_USER:
-                user.save()
+        #     # If we are keeping a local copy of the user model we
+        #     # should save these attributes which have a corresponding
+        #     # instance in the DB.
+        #     if settings.CAS_CREATE_USER:
+        #         user.save()
 
         # send the `cas_user_authenticated` signal
         cas_user_authenticated.send(

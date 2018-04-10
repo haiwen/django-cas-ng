@@ -3,11 +3,12 @@ from django.db import models
 from django.conf import settings
 from .utils import (get_cas_client, get_user_from_session)
 
-
 from importlib import import_module
 from cas import CASError
 
 import django
+
+from seahub.base.fields import LowerCaseCharField
 
 SessionStore = import_module(settings.SESSION_ENGINE).SessionStore
 
@@ -20,13 +21,7 @@ class ProxyGrantingTicket(models.Model):
     class Meta:
         unique_together = ('session_key', 'user')
     session_key = models.CharField(max_length=255, blank=True, null=True)
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        related_name="+",
-        null=True,
-        blank=True,
-        on_delete=models.CASCADE
-    )
+    user = LowerCaseCharField(max_length=255, db_index=True)
     pgtiou = models.CharField(max_length=255, null=True, blank=True)
     pgt = models.CharField(max_length=255, null=True, blank=True)
     date = models.DateTimeField(auto_now_add=True)
@@ -51,7 +46,8 @@ class ProxyGrantingTicket(models.Model):
         The function return a Proxy Ticket or raise `ProxyError`
         """
         try:
-            pgt = cls.objects.get(user=request.user, session_key=request.session.session_key).pgt
+            pgt = cls.objects.get(user=request.user.username,
+                                  session_key=request.session.session_key).pgt
         except cls.DoesNotExist:
             raise ProxyError(
                 "INVALID_TICKET",

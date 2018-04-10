@@ -13,11 +13,6 @@ from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
-from django.contrib.auth import (
-    logout as auth_logout,
-    login as auth_login,
-    authenticate
-)
 from django.contrib import messages
 from django.utils.translation import ugettext_lazy as _
 from django.views.decorators.http import require_http_methods
@@ -28,6 +23,11 @@ SessionStore = import_module(settings.SESSION_ENGINE).SessionStore
 
 from datetime import timedelta
 
+from seahub.auth import (
+    logout as auth_logout,
+    login as auth_login,
+    authenticate
+)
 from .signals import cas_user_logout
 from .models import ProxyGrantingTicket, SessionTicket
 from .utils import (get_cas_client, get_service_url,
